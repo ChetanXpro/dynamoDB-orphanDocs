@@ -164,7 +164,7 @@ const massScan = async (userId) => {
 
     }
 
-    for (const item of tables) {
+    for (const item of tabless) {
         await scanParams(item);
     }
 
@@ -172,13 +172,54 @@ const massScan = async (userId) => {
 
 }
 
-
+let newKey = '555555'
 const txn = async (data) => {
     let track = {}
+    let pram = []
 
     data.forEach((e) => {
-        const currKey = Object.keys(e)
+        const currKey = Object.keys(e)[0]
+        // console.log(currKey)
+        // console.log(e[currKey].length)
 
+        if (e[currKey].length == 0) return
+
+
+        e[currKey].forEach(i => {
+            // console.log('Run')
+            // console.log(Object.keys(i[Object.keys(i)])[0]);
+
+            let innerObjKey = Object.keys(i[Object.keys(i)])[0]
+
+
+            let innerObjValue = i[Object.keys(i)][innerObjKey]
+
+
+
+
+            let expValue = `:${innerObjKey}`
+
+            let obj = {
+                "Update": {
+
+                    "TableName": currKey,
+
+                    "Key": {
+                        "id": { "S": Object.keys(i) }
+                    },
+                    "UpdateExpression": `set ${innerObjKey} = :${innerObjKey}`,
+                    "ExpressionAttributeValues": {
+                        [expValue]: {
+                            "S": innerObjValue
+                        }
+                    }
+                }
+            }
+
+            pram.push(obj)
+        })
+
+        console.log(pram[0].Update.Key)
 
     })
 
