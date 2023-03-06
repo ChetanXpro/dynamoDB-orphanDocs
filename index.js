@@ -40,41 +40,13 @@ const tables = [{
 {
     "WatcherTask-apobio35frg77c7rjko75fo4ii-dev": ["userId"]
 }
-,
+    ,
 {
     "User-apobio35frg77c7rjko75fo4ii-dev": ["createdBy"]
 }
 ]
 
-const fet = async () => {
 
-
-
-    let params = {
-        'TransactItems': [
-            {
-                "Update": {
-
-                    "TableName": 'User-apobio35frg77c7rjko75fo4ii-dev',
-
-                    "Key": {
-                        "id": { "S": "8d280b94-921b-5c9d-a4ad-e9456eac142b" }
-                    },
-                    "UpdateExpression": "set lastName = :lastName",
-                    "ExpressionAttributeValues": {
-                        ":lastName": {
-                            "S": 'baliyannn'
-                        }
-                    }
-                }
-            }
-
-        ]
-    }
-
-    const data = await ddbClient.send(new TransactWriteItemsCommand(params));
-    console.log(data)
-}
 
 
 
@@ -92,8 +64,47 @@ const tabless = [{
     "ProductDoc-apobio35frg77c7rjko75fo4ii-dev": ["createdByUserId", "lastModifiedByUserId"]
 }
 ]
+let final = []
+
+const scan = async (params, userId, ret, tableName) => {
+    const scanCommand = new ScanCommand(params);
+    const res = await ddbClient.send(scanCommand)
+    let txn = {}
+    let gg = []
+    res.Items.forEach(i => {
+        ret.split(',').forEach(e => {
+            // console.log(i[e]?.S)
+            if (userId !== i[e]?.S) return
+
+            const khi = {}
+            const currVal = i[e].S
+
+            let id = i['id'].S
+            let bye = {}
+            bye[e] = currVal
+            khi[id] = bye
+            gg.push(khi)
+        })
+    })
+
+    txn = { [tableName]: [...gg] }
+
+
+    final.push(txn)
+
+
+
+
+}
+
+
+
 const massScan = async (userId) => {
-    tables.forEach((item, index) => {
+    let final = []
+
+    let allRequest = []
+    const scanParams = async (item) => {
+
 
         const okkk = item[Object.keys(item)[0]].map((i, x) => {
 
@@ -147,47 +158,71 @@ const massScan = async (userId) => {
         };
 
 
-
-        let txn = []
-
-        const scanCommand = new ScanCommand(params);
-        const response = ddbClient.send(scanCommand).then(res => {
-
-            let txn = {}
-            let gg = []
-            res.Items.forEach(i => {
+        allRequest.push(scan(params, userId, ret, tableName))
 
 
 
-                ret.split(',').forEach(e => {
-                    // console.log(i[e]?.S)
-                    if (userId !== i[e]?.S) return
+    }
 
-                    const khi = {}
-                    const currVal = i[e].S
+    for (const item of tables) {
+        await scanParams(item);
+    }
 
-                    let id = i['id'].S
-                    let bye = {}
-                    bye[e] = currVal
-                    khi[id] = bye
-                    gg.push(khi)
+    await Promise.all(allRequest)
 
-                })
-
-
-
-            })
-            // console.log(tableName)
-            // let oo = tableName = [...gg]
-            txn = { [tableName]: [...gg] }
-            // console.log(gg)
-
-            console.log(txn);
-        })
-    })
 }
 
-massScan("07ea6cf6-c67b-5688-a253-4303429a2276")
+
+const txn = async (data) => {
+    let track = {}
+
+    data.forEach((e) => {
+        const currKey = Object.keys(e)
+
+
+    })
+
+
+
+    let params = {
+        'TransactItems': [
+            {
+                "Update": {
+
+                    "TableName": 'User-apobio35frg77c7rjko75fo4ii-dev',
+
+                    "Key": {
+                        "id": { "S": "8d280b94-921b-5c9d-a4ad-e9456eac142b" }
+                    },
+                    "UpdateExpression": "set lastName = :lastName, firstName = :firstName",
+                    "ExpressionAttributeValues": {
+                        ":lastName": {
+                            "S": 'baliyannn'
+                        },
+                        ":firstName": {
+                            "S": 'chetannnn'
+                        }
+                    }
+                }
+            }
+
+        ]
+    }
+
+    // const data = await ddbClient.send(new TransactWriteItemsCommand(params));
+    // console.log(data)
+}
+
+
+
+const runScan = async () => {
+
+    await massScan("8d280b94-921b-5c9d-a4ad-e9456eac142b")
+    txn(final)
+
+}
+
+runScan()
 
 
 
