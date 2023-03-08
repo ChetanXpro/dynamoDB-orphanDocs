@@ -5,6 +5,7 @@ import { ScanCommand, TransactGetItemsCommand, TransactWriteItemsCommand } from 
 import { ddbClient } from "./DynamoDb.js";
 
 
+// List of all tables which we want to target and in value we have to put all fiels which contains user's id
 const tables = [{
     "Chapter-apobio35frg77c7rjko75fo4ii-dev": ["createdByUserId", "lastModifiedByUserId"]
 },
@@ -44,26 +45,31 @@ const tables = [{
 ]
 
 
-const tabless = [{
-    "ProductDoc-apobio35frg77c7rjko75fo4ii-dev": ["createdByUserId", "lastModifiedByUserId"]
-}
-]
+
+
+
+
+// List of tables which have two keys (primarykey + sortKey)
+const sortKey = ['Chapter-apobio35frg77c7rjko75fo4ii-dev', 'Doc-apobio35frg77c7rjko75fo4ii-dev', 'DocItem-apobio35frg77c7rjko75fo4ii-dev', 'ProductDoc-apobio35frg77c7rjko75fo4ii-dev']
+
+
+
 let final = []
 let versionFinal = []
 let sortKeyMap = {}
-const sortKey = ['Chapter-apobio35frg77c7rjko75fo4ii-dev', 'Doc-apobio35frg77c7rjko75fo4ii-dev', 'DocItem-apobio35frg77c7rjko75fo4ii-dev', 'ProductDoc-apobio35frg77c7rjko75fo4ii-dev']
+
+
 
 const scan = async (params, userId, ret, tableName) => {
     const scanCommand = new ScanCommand(params);
     const res = await ddbClient.send(scanCommand)
     let txn = {}
-    // console.log(res.Items)
     let gg = []
     let sortKeyArr = []
-    let captureVersion = []
+
 
     res.Items.forEach(i => {
-        // console.log(i)
+       
 
 
         ret.split(',').forEach(e => {
@@ -71,13 +77,12 @@ const scan = async (params, userId, ret, tableName) => {
             if (userId !== i[e]?.S) return
 
             if (sortKey.includes(tableName)) {
-                // console.log(i.version)
-                // sortKeyMap[tableName]
+
 
 
 
                 let version = i['version'].S
-                // captureVersion.push({ 'V': version })
+
 
 
 
@@ -87,14 +92,14 @@ const scan = async (params, userId, ret, tableName) => {
                 let id = i['id'].S
                 let bye = {}
                 bye[e] = currVal
-                khi[id] = bye
-                // console.log(khi)
-                // console.log('push')
-                sortKeyArr.push(khi, { 'V': version })
-                // console.log('version', tableName)
+                const conObj = Object.assign({}, bye, { 'V': version })
+                khi[id] = conObj
+
+                sortKeyArr.push(khi)
+
                 return
             }
-            // console.log('not version', tableName)
+
 
 
             const khi = {}
@@ -132,7 +137,7 @@ const massScan = async (userId) => {
     let allRequest = []
     const scanParams = async (item) => {
 
-
+        // Create ProjectionExpression values
         const okkk = item[Object.keys(item)[0]].map((i, x) => {
 
 
@@ -148,6 +153,9 @@ const massScan = async (userId) => {
 
 
         let filter = ''
+
+
+        // Construct FilterExpression value
         okkk.forEach(h => {
             filter = filter + h + " "
         })
@@ -170,8 +178,11 @@ const massScan = async (userId) => {
 
         });
 
+
+
         const tableName = Object.keys(item)[0]
 
+        // Params for scan
         const params = {
             FilterExpression: filter,
             ExpressionAttributeValues: val.reduce((accumulator, currentValue) => {
@@ -184,11 +195,8 @@ const massScan = async (userId) => {
             TableName: tableName,
         };
 
-
+        // Pushiing all promise to an array
         allRequest.push(scan(params, userId, ret, tableName))
-
-
-
     }
 
     for (const item of tables) {
@@ -199,44 +207,136 @@ const massScan = async (userId) => {
 
 }
 
-let newKey = '83485ed8-4fd2-5852-9ce5-ec3703cf79a5'
 
-const txn = async (data) => {
+
+
+
+const txn = async (data, newKey) => {
     let track = {}
-    console.log(data)
+    // console.log(data)
     let pram = []
     let pram2 = []
 
-   
+
+    // Create params for Transaction
 
     data.forEach((e) => {
         const currKey = Object.keys(e)[0]
 
-        // console.log(currKey)
-        console.log(e[currKey])
-
-
-
         if (e[currKey].length == 0) return
 
-        // if (sortKey.includes(currKey)) return
+
+        // Merge two objects which have same keys
+        const map = new Map();
+        const mergeSameKeyObjects = e[currKey].forEach(i => {
+
+            const key = Object.keys(i)[0];
+            const value = i[key];
+
+            if (map.has(key)) {
+                map.set(key, { ...map.get(key), ...value });
+            } else {
+                map.set(key, value);
+            }
+        })
+
+
+        const mergedObjects = Array.from(map, ([key, value]) => ({ [key]: value }));
 
 
 
-        e[currKey].forEach(i => {
-            // console.log(i)
+        mergedObjects.forEach(i => {
+
+            const innerArr = Object.keys(Object.values(i)[0])
 
 
-            // console.log(`Without version`, currKey)
+
+            //  Construct values for UpdateExpression key in txn
+            let finish = ''
+            const constructUpdateExpression = innerArr.map((i, x) => {
+
+                if (i === 'V') return
+
+                const cc = innerArr.filter(i => {
+                    return i !== 'V'
+                })
+
+
+                if (innerArr.length === 1 || cc.length === 1) {
+
+                    return finish = `set ${i} = :${i}`
+
+                }
+
+
+                if (innerArr.length === x + 1) {
+                    return finish = finish + `${i} = :${i}`
+                }
+
+                if (x === 0) {
+                    return finish = finish + `set ${i} = :${i},`
+                }
+                return finish + ` ${i} = :${i},`
+            })
+
+
+
+
+
             let innerObjKey = Object.keys(i[Object.keys(i)])[0]
 
 
-            let innerObjValue = i[Object.keys(i)][innerObjKey]
+            // Construct ExpressionAttributeValues values
+            let expObj = {}
+
+            Object.keys(Object.values(i)[0]).forEach(i => {
+                if (i === 'V') return
+
+                // let nn = {}
+
+                expObj[":" + i] = {
+                    "S": newKey.toString()
+                }
+
+
+            })
+
+
+            // Transaction obj for tables which have 2 ids
+            const isVersionKey = Object.keys(i[Object.keys(i)]).filter(i => {
+                return i === 'V'
+            })
+
+            if (isVersionKey.length !== 0) {
+
+
+                let innerObjValue = i[Object.keys(i)]['V']
+
+                let expValue = `:${innerObjKey}`
+
+                let obj = {
+                    "Update": {
+
+                        "TableName": currKey.toString(),
+
+                        "Key": {
+                            "id": { "S": Object.keys(i).toString() },
+                            "version": { "S": innerObjValue }
+
+                        },
+                        "UpdateExpression": finish,
+                        "ExpressionAttributeValues": expObj
+                    }
+                }
+
+                pram2.push(obj)
+
+                return
+            }
 
 
 
-
-            let expValue = `:${innerObjKey}`
+            //Transaction Obj for single id tables 
 
             let obj = {
                 "Update": {
@@ -246,89 +346,51 @@ const txn = async (data) => {
                     "Key": {
                         "id": { "S": Object.keys(i).toString() }
                     },
-                    "UpdateExpression": `set ${innerObjKey} = :${innerObjKey}`,
-                    "ExpressionAttributeValues": {
-                        [expValue]: {
-                            "S": `${newKey}`
-                        }
-                    }
+                    "UpdateExpression": finish,
+                    "ExpressionAttributeValues": expObj
                 }
             }
             pram.push(obj)
+
+
         })
     })
-    // pram.forEach(e=>{
-    //     console.log(e.Update.TableName)
-    //     console.log(e.Update.Key)
-    //     console.log(e.Update.ExpressionAttributeValues)
-    // })
-    // console.log(pram.length)
 
 
 
-    let paramss = {
-        'TransactItems': [
-            {
-                "Update": {
 
-                    "TableName": 'Chapter-apobio35frg77c7rjko75fo4ii-dev',
 
-                    "Key": {
-                        "id": { "S": "b86ca222-3efe-4259-be9c-e14c78063cff" },
-                        "version": { "S": "1" }
-                    },
-                    "UpdateExpression": "set description = :description",
-                    "ExpressionAttributeValues": {
-                        ":description": {
-                            "S": 'test desc'
-                        }
-                    }
-                }
-            }
-
-        ]
-    }
-    // console.log(paramss.TransactItems[0])
     let params = {
         'TransactItems': [
-            ...pram
+            ...pram,
+            ...pram2
         ]
     }
-    // console.log(params.TransactItems[0])
 
-    // const txnReq = await ddbClient.send(new TransactWriteItemsCommand(paramss));
-    // // 
 
-    // console.log(txnReq)
+    const txnReq = await ddbClient.send(new TransactWriteItemsCommand(params));
+    console.log(txnReq)
+
 }
 
 
 
 const runScan = async () => {
+    // enter old key to scan
+    let oldKey = '83485ed8-4fd2-5852-9ce5-ec3703cf79a5'
+    // Call table scan method
+    await massScan(oldKey)
 
-    await massScan("8d280b94-921b-5c9d-a4ad-e9456eac142b")
-    // console.log(final)
-    txn([...final, ...versionFinal])
-    // console.log(versionFinal)
+
+
+
+    // Enter new key 
+    let newKey = '8d280b94-921b-5c9d-a4ad-e9456eac142b'
+
+    // txn function
+    txn([...final, ...versionFinal], newKey)
+
 }
 
 runScan()
 
-
-
-
-
-// 8d280b94-921b-5c9d-a4ad-e9456eac142b
-
-//new
-// 83485ed8-4fd2-5852-9ce5-ec3703cf79a5
-
-
-
-
-
-
-
-
-
-// 8d280b94-921b-5c9d-a4ad-e9456eac142b
